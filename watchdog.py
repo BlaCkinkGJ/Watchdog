@@ -2,11 +2,12 @@ from urllib.request import urlopen
 import pandas as pd
 import time
 import logging, argparse
-import multiprocessing
 import threading
 import copy
+import signal, sys
 
 from bs4 import BeautifulSoup
+import multiprocessing
 from multiprocessing.managers import BaseManager
 from win10toast import ToastNotifier
 from queue import LifoQueue
@@ -18,6 +19,8 @@ stream_handler = logging.StreamHandler()
 stream_handler.setFormatter(formatter)
 logger.setLevel(level=logging.INFO)
 logger.addHandler(stream_handler)
+
+runnable = True
 
 
 class data_manager(BaseManager):
@@ -42,39 +45,54 @@ def load_board_contents(url, queue):
     queue.put(table.iloc[0])
 
 
+# For multiprocessing
 def load_board_helper(args):
     load_board_contents(args[0], args[1])
 
 
 def request_loop(url, lifo_queue, sec=1.0):
-    args = [(url, lifo_queue)]
-    nr_cpu = 2
+    global runnable
+    args = (url, lifo_queue)
 
-    if multiprocessing.cpu_count() < 2:
-        nr_cpu = multiprocessing.cpu_count()
-
-    while True:
-        p = multiprocessing.Pool(nr_cpu)
-        p.map(load_board_helper, args)
-        p.close()
-        p.join()
+    while runnable:
+        load_board_helper(args)
         time.sleep(sec)
 
 
+request_loop_thread = None
+manager = None
+
+
+def signal_handler(sig, frame):
+    global request_loop_thread, manager, runnable
+
+    logger.info("Ctrl+C pressed")
+    if request_loop_thread is not None:
+        runnable = False
+        request_loop_thread.join()
+    if manager is not None:
+        manager.shutdown()
+    sys.exit(0)
+
+
 if __name__ == '__main__':
+
+    multiprocessing.freeze_support()
+
+    signal.signal(signal.SIGINT, signal_handler)
 
     logger.info("~~~ Watchdog(ver 0.1) ~~~")
     logger.info("* 개발자: BlaCkinkGJ")
     logger.info("* 버그 리포트: ss5kijun@gmail.com")
 
+    URL = "https://www.pusan.ac.kr/kor/CMS/Board/Board.do?mCode=MN096"
+    POINT = '제목'
+    SECONDS = 1.0
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-u', '--url', metavar='<connect URL>', type=str, help="URL을 설정해주십시오.[기본값: 부산대 자유게시판]")
     parser.add_argument('-p', '--point', metavar='<column point>', type=str, help="출력하고자는 열 이름을 적으시오.[기본값: 제목]")
     parser.add_argument('-t', '--time', metavar='<time(seconds)>', type=float, help="출력 주기(초 단위)를 설정하시오.[기본값: 1.0]")
-
-    URL = "https://www.pusan.ac.kr/kor/CMS/Board/Board.do?mCode=MN096"
-    POINT = '제목'
-    SECONDS = 1.0
 
     args = parser.parse_args()
 
