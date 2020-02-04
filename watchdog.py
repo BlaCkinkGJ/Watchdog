@@ -130,7 +130,7 @@ if __name__ == '__main__':
             logger.info("===Previous Data===\n{}".format(prev_data))
             logger.info("Updated State ==> {}".format(str(data) != str(prev_data)))
             if prev_data is not None and str(prev_data) != str(data):
-                toaster.show_toast("URL WatchDog", "{}".format(data[POINT]))
+                toaster.show_toast("URL WatchDog", "{}".format(data[POINT]), icon_path="python.ico")
                 prev_data = copy.deepcopy(data)
             if prev_data is None:
                 prev_data = copy.deepcopy(data)
